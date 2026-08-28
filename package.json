@@ -1,8 +1,8 @@
 {
   "name": "millimetre-erp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {"dev":"next dev","build":"next build","start":"next start","lint":"next lint"},
-  "dependencies": {"next":"latest","react":"latest","react-dom":"latest","@supabase/supabase-js":"latest"},
+  "dependencies": {"next":"latest","react":"latest","react-dom":"latest","@supabase/supabase-js":"latest","@supabase/ssr":"latest"},
   "devDependencies": {"typescript":"latest","@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","tailwindcss":"latest","@tailwindcss/postcss":"latest","postcss":"latest"}
 }
