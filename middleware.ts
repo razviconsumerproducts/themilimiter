@@ -24,24 +24,32 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request })
-  const supabase = createServerClient(supabaseUrl, supabaseKey, {
-    cookies: {
-      getAll: () => request.cookies.getAll(),
-      setAll: (values) => {
-        values.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value)
-          response.cookies.set(name, value, options)
-        })
+
+  try {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll: (values) => {
+          values.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
+            response.cookies.set(name, value, options)
+          })
+        },
       },
-    },
-  })
+    })
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
-  if (!user && !publicPath) return NextResponse.redirect(new URL('/login', request.url))
-  if (user && pathname === '/login') return NextResponse.redirect(new URL('/', request.url))
+    if (!user && !publicPath) return NextResponse.redirect(new URL('/login', request.url))
+    if (user && pathname === '/login') return NextResponse.redirect(new URL('/', request.url))
+  } catch {
+    // Treat auth failures as unauthenticated instead of allowing middleware
+    // invocation errors to turn into a deployment-wide 500.
+    if (!publicPath) return NextResponse.redirect(new URL('/login', request.url))
+  }
+
   return response
 }
 
