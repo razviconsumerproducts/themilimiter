@@ -1,0 +1,6 @@
+import { supabase } from '../../lib/supabase'
+
+export default async function InventoryPage() {
+  const { data: inventory, error } = await supabase.from('inventory').select('quantity,reorder_level,products(sku,name,unit),warehouses(code,name)').order('updated_at',{ascending:false})
+  return <main className="main"><header className="top"><div><h1 className="title">Inventory</h1><div className="muted">Stock by product and warehouse</div></div><a className="status" href="/">Dashboard</a></header>{error ? <div className="card">Unable to load inventory.</div> : <section className="section"><table className="table"><thead><tr><th>SKU</th><th>Product</th><th>Warehouse</th><th>Quantity</th><th>Reorder Level</th></tr></thead><tbody>{(inventory ?? []).map((r:any,i:number)=><tr key={i}><td>{r.products?.sku ?? '—'}</td><td>{r.products?.name ?? '—'}</td><td>{r.warehouses?.name ?? r.warehouses?.code ?? '—'}</td><td>{r.quantity} {r.products?.unit ?? ''}</td><td>{r.reorder_level}</td></tr>)}</tbody></table></section>}</main>
+}
