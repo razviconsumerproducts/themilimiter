@@ -1,6 +1,32 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '../../lib/supabase'
+import { createBrowserClient } from '@supabase/ssr'
 
-export default function LoginPage(){const [email,setEmail]=useState('');const [password,setPassword]=useState('');const [error,setError]=useState('');const [busy,setBusy]=useState(false);const router=useRouter();async function login(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');const {error}=await supabase.auth.signInWithPassword({email,password});if(error)setError(error.message);else router.push('/');setBusy(false)}return <main className="main"><section className="section" style={{maxWidth:460,margin:'8vh auto'}}><div className="card"><h1 className="title">MILLIMETRE</h1><p className="muted">Sign in to the operations system</p><form onSubmit={login} style={{display:'grid',gap:14}}><input aria-label="Email" type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email"/><input aria-label="Password" type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password"/><button type="submit" disabled={busy}>{busy?'Signing in…':'Sign in'}</button>{error&&<p role="alert">{error}</p>}</form></div></section></main>}
+export default function LoginPage(){
+  const [email,setEmail]=useState('')
+  const [password,setPassword]=useState('')
+  const [error,setError]=useState('')
+  const [busy,setBusy]=useState(false)
+  const router=useRouter()
+
+  async function login(e:React.FormEvent){
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    const url=process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+    if(!url || !key){
+      setError('Supabase configuration is missing. Please contact an administrator.')
+      setBusy(false)
+      return
+    }
+    const supabase=createBrowserClient(url,key)
+    const {error}=await supabase.auth.signInWithPassword({email,password})
+    if(error)setError(error.message)
+    else router.push('/')
+    setBusy(false)
+  }
+
+  return <main className="main"><section className="section" style={{maxWidth:460,margin:'8vh auto'}}><div className="card"><h1 className="title">MILLIMETRE</h1><p className="muted">Sign in to the operations system</p><form onSubmit={login} style={{display:'grid',gap:14}}><input aria-label="Email" type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email"/><input aria-label="Password" type="password" required value={password} onChange={e=>setPassword(e.target.value)} placeholder="Password"/><button type="submit" disabled={busy}>{busy?'Signing in…':'Sign in'}</button>{error&&<p role="alert">{error}</p>}</form></div></section></main>
+}
