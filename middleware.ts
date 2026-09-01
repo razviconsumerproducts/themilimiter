@@ -1,17 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from './lib/supabase-config'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || SUPABASE_URL
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || SUPABASE_PUBLISHABLE_KEY
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const publicPath = pathname === '/login' || pathname === '/signup' || pathname === '/api/health' || pathname.startsWith('/api/auth/') || pathname.startsWith('/auth/') || pathname.startsWith('/_next/') || pathname === '/favicon.ico'
-
-  if (!supabaseUrl || !supabaseKey) {
-    if (publicPath) return NextResponse.next()
-    return NextResponse.redirect(new URL('/login', request.url))
-  }
 
   const response = NextResponse.next({ request })
   try {
