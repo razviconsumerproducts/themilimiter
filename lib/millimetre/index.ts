@@ -12,3 +12,4 @@ export * from './approval-payment';
 export * from './purchase';
 export * from './goods-receipt';
 export * from './inventory';
+export * from './production';
