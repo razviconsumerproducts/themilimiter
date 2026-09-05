@@ -8,3 +8,4 @@ export * from './bom';
 export * from './bom-costing';
 export * from './costing';
 export * from './quotation';
+export * from './approval-payment';
