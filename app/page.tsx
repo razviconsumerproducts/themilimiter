@@ -1,4 +1,69 @@
 import { createSupabaseServerClient } from '../lib/supabase-server'
 
-const modules=[['Dashboard','/'],['Products','/products'],['Inventory','/inventory'],['Sales','/sales'],['Purchasing','/purchasing'],['Manufacturing','/manufacturing'],['MES','/mes'],['Maintenance','/maintenance'],['Quality','/quality'],['Customers','/customers'],['Suppliers','/suppliers'],['Reports','/reports'],['Users & Roles','/users'],['Settings','/settings']]
-export default async function Home(){const supabase=await createSupabaseServerClient();const [ow,md,pd,inv]=await Promise.all([supabase.from('work_orders').select('*',{count:'exact',head:true}).eq('status','open'),supabase.from('assets').select('*',{count:'exact',head:true}).eq('status','down'),supabase.from('maintenance_records').select('*',{count:'exact',head:true}).eq('status','scheduled'),supabase.from('inventory').select('quantity,product_id')]);const {data:workOrders}=await supabase.from('work_orders').select('work_order_no,asset_id,order_type,status').order('created_at',{ascending:false}).limit(4);const productIds=[...new Set((inv.data??[]).map(i=>i.product_id).filter(Boolean))];const {data:products}=productIds.length?await supabase.from('products').select('id,standard_cost').in('id',productIds):{data:[] as {id:string;standard_cost:number|null}[]};const costMap=new Map((products??[]).map(p=>[p.id,Number(p.standard_cost??0)]));const inventoryValue=(inv.data??[]).reduce((sum,i)=>sum+Number(i.quantity??0)*(costMap.get(i.product_id)??0),0);const assetIds=(workOrders??[]).map(w=>w.asset_id).filter(Boolean);const {data:assets}=assetIds.length?await supabase.from('assets').select('id,asset_code').in('id',assetIds):{data:[] as {id:string;asset_code:string}[]};const assetMap=new Map((assets??[]).map(a=>[a.id,a.asset_code]));return <div className="shell"><aside className="side"><div className="brand">MILLIMETRE</div><nav className="nav">{modules.map(([m,href],i)=><a key={m} href={href} className={i===0?'active':''}>{m}</a>)}</nav></aside><main className="main"><header className="top"><div><h1 className="title">Operations Dashboard</h1><div className="muted">Manufacturing & enterprise operations</div></div><span className="status">Production</span></header><section className="grid"><div className="card"><div className="muted">Open Work Orders</div><div className="metric">{ow.count??0}</div></div><div className="card"><div className="muted">Machines Down</div><div className="metric">{md.count??0}</div></div><div className="card"><div className="muted">Preventive Due</div><div className="metric">{pd.count??0}</div></div><div className="card"><div className="muted">Inventory Value</div><div className="metric">₹{inventoryValue.toLocaleString('en-IN',{maximumFractionDigits:2})}</div></div></section><section className="section"><h2>Maintenance Work Orders</h2><table className="table"><thead><tr><th>Work Order</th><th>Asset</th><th>Type</th><th>Status</th></tr></thead><tbody>{(workOrders??[]).map(r=><tr key={r.work_order_no}><td>{r.work_order_no}</td><td>{r.asset_id?assetMap.get(r.asset_id)??'—':'—'}</td><td>{r.order_type??'—'}</td><td><span className="status">{r.status??'—'}</span></td></tr>)}{!(workOrders??[]).length&&<tr><td colSpan={4}>No work orders found.</td></tr>}</tbody></table></section></main></div>}
+const modules = [
+  ['Dashboard', '/'], ['Customers', '/customers'], ['Projects', '/projects'],
+  ['Measurements', '/measurements'], ['Furniture', '/furniture'], ['Calculation', '/calculation'],
+  ['Cutting List', '/cutting-list'], ['BOM / BOQ', '/bom'], ['Optimization', '/optimization'],
+  ['Costing', '/costing'], ['Quotation', '/sales'], ['Payments', '/payments'],
+  ['Purchase', '/purchasing'], ['Goods Receipt', '/receiving'], ['Inventory', '/inventory'],
+  ['Production', '/manufacturing'], ['Production QC', '/quality'], ['Labels / QR', '/labels'],
+  ['Delivery', '/delivery'], ['Installation', '/installation'], ['Handover', '/handover'],
+  ['Warranty / Service', '/service'], ['Reports', '/reports'],
+]
+
+const count = async (supabase: any, table: string, filter?: (q: any) => any) => {
+  let q = supabase.from(table).select('*', { count: 'exact', head: true })
+  if (filter) q = filter(q)
+  const result = await q
+  return result.count ?? 0
+}
+
+export default async function Home() {
+  const supabase = await createSupabaseServerClient()
+  const [projects, activeProjects, production, qcFailed, deliveries, installations, handovers, service] = await Promise.all([
+    count(supabase, 'projects'),
+    count(supabase, 'projects', q => q.not('status', 'in', '(closed,cancelled)')),
+    count(supabase, 'production_orders', q => q.not('status', 'in', '(completed,cancelled)')),
+    count(supabase, 'quality_inspections', q => q.eq('result', 'fail')),
+    count(supabase, 'delivery_orders', q => q.not('status', 'in', '(delivered,closed,cancelled)')),
+    count(supabase, 'installation_jobs', q => q.not('status', 'in', '(completed,cancelled)')),
+    count(supabase, 'handovers', q => q.in('status', ['ready_for_acceptance', 'customer_review', 'snag_pending'])),
+    count(supabase, 'service_requests', q => q.not('status', 'in', '(closed,cancelled)')),
+  ])
+
+  const { data: pipeline } = await supabase
+    .from('millimetre_project_pipeline')
+    .select('project_code,project_name,customer_name,status,current_stage,furniture_count,delivery_count,installation_count,handover_count,service_request_count')
+    .order('project_code', { ascending: false })
+    .limit(8)
+
+  const cards = [
+    ['Projects', projects], ['Active Projects', activeProjects], ['Production Active', production],
+    ['QC Failures', qcFailed], ['Deliveries Pending', deliveries], ['Installation Active', installations],
+    ['Handover Attention', handovers], ['Open Service', service],
+  ]
+
+  return <div className="shell">
+    <aside className="side">
+      <div className="brand">MILLIMETRE</div>
+      <nav className="nav">{modules.map(([name, href], i) => <a key={name} href={href} className={i === 0 ? 'active' : ''}>{name}</a>)}</nav>
+    </aside>
+    <main className="main">
+      <header className="top">
+        <div><h1 className="title">Executive Dashboard</h1><div className="muted">Canonical V1 operational control centre</div></div>
+        <span className="status">V1</span>
+      </header>
+
+      <section className="grid">{cards.map(([label, value]) => <div className="card" key={label}><div className="muted">{label}</div><div className="metric">{value}</div></div>)}</section>
+
+      <section className="section">
+        <div className="section-head"><h2>Project Pipeline</h2><span className="muted">Live from canonical project records</span></div>
+        <div className="table-wrap"><table className="table"><thead><tr><th>Project</th><th>Customer</th><th>Stage</th><th>Status</th><th>Furniture</th><th>Delivery</th><th>Install</th><th>Handover</th></tr></thead>
+          <tbody>{(pipeline ?? []).map(p => <tr key={p.project_code}><td><strong>{p.project_code}</strong><br /><span className="muted">{p.project_name}</span></td><td>{p.customer_name ?? '—'}</td><td>{p.current_stage ?? '—'}</td><td><span className="status">{p.status}</span></td><td>{p.furniture_count}</td><td>{p.delivery_count}</td><td>{p.installation_count}</td><td>{p.handover_count}</td></tr>)}{!(pipeline ?? []).length && <tr><td colSpan={8}>No projects yet. Create a project to begin the canonical V1 workflow.</td></tr>}</tbody>
+        </table></div>
+      </section>
+
+      <section className="section"><h2>V1 workflow</h2><div className="workflow">{['Foundation','Customer + Project','Measurements','Furniture','Calculation','Cutting','BOM','Optimization','Costing','Quotation','Approval / Payment','Purchase','Receipt + QC','Inventory','Production','Production QC','Labels / QR','Delivery + Installation','Handover','Warranty / Service','Executive Dashboard'].map((stage, i) => <div className="stage" key={stage}><span>{i + 1}</span>{stage}</div>)}</div></section>
+    </main>
+  </div>
+}
