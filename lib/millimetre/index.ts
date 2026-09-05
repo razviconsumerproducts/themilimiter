@@ -10,3 +10,4 @@ export * from './costing';
 export * from './quotation';
 export * from './approval-payment';
 export * from './purchase';
+export * from './goods-receipt';
