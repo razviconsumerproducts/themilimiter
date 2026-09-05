@@ -4,3 +4,4 @@ export * from './calculation-validation';
 export * from './calculation-run';
 export * from './cutting-list';
 export * from './optimization';
+export * from './bom';
