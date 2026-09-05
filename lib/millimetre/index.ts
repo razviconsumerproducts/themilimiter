@@ -17,3 +17,4 @@ export * from './production-qc';
 export * from './labels-qr';
 export * from './delivery-installation';
 export * from './handover';
+export * from './warranty-service';
