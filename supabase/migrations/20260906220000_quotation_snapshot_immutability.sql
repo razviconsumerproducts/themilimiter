@@ -7,7 +7,8 @@ language plpgsql
 as $$
 begin
   if old.status = 'ACCEPTED' then
-    if new.project_id <> old.project_id
+    if new.status <> old.status
+      or new.project_id <> old.project_id
       or new.customer_id <> old.customer_id
       or new.costing_run_id <> old.costing_run_id
       or new.version <> old.version
@@ -60,7 +61,5 @@ create trigger quotation_items_prevent_accepted_mutation
 before insert or update or delete on public.quotation_items
 for each row execute function public.prevent_accepted_quotation_item_mutation();
 
--- A new version must still use a costing snapshot that is approved/locked;
--- the existing commercial-lineage trigger enforces project/customer linkage.
 create index if not exists quotations_project_code_version_idx
 on public.quotations(project_id, quotation_code, version);
