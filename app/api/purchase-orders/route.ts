@@ -84,20 +84,28 @@ export async function POST(request: Request) {
 
     if (orderError) return NextResponse.json({ error: orderError.message }, { status: 409 })
 
-    const dbItems = result.items.map((item, index) => ({
-      purchase_order_id: order.id,
-      project_id: projectId,
-      purchase_request_item_id: rawItems[index] && typeof rawItems[index] === 'object' ? (rawItems[index] as Record<string, unknown>).purchaseRequestItemId ?? null : null,
-      supplier_item_id: rawItems[index] && typeof rawItems[index] === 'object' ? (rawItems[index] as Record<string, unknown>).supplierItemId ?? null : null,
-      item_code: item.itemCode,
-      description: item.description,
-      quantity: item.quantity,
-      unit: item.unit,
-      unit_price: item.unitPrice,
-      tax_rate: item.taxRate ?? 0,
-      price_snapshot: item.priceSnapshot ?? {},
-      notes: null,
-    }))
+    const dbItems = result.items.map((item) => {
+      const raw = rawItems.find((candidate) => {
+        if (!candidate || typeof candidate !== 'object') return false
+        const source = candidate as Record<string, unknown>
+        return String(source.itemCode ?? '').trim() === item.itemCode && String(source.description ?? '').trim() === item.description
+      }) as Record<string, unknown> | undefined
+
+      return {
+        purchase_order_id: order.id,
+        project_id: projectId,
+        purchase_request_item_id: raw?.purchaseRequestItemId == null ? null : String(raw.purchaseRequestItemId),
+        supplier_item_id: raw?.supplierItemId == null ? null : String(raw.supplierItemId),
+        item_code: item.itemCode,
+        description: item.description,
+        quantity: item.quantity,
+        unit: item.unit,
+        unit_price: item.unitPrice,
+        tax_rate: item.taxRate ?? 0,
+        price_snapshot: item.priceSnapshot ?? {},
+        notes: raw?.notes == null ? null : String(raw.notes),
+      }
+    })
 
     const { data: insertedItems, error: itemError } = await supabase
       .from('purchase_order_items').insert(dbItems).select('*')
