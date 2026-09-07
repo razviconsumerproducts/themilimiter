@@ -19,7 +19,10 @@ export interface CalculationValidation {
   valid: boolean;
 }
 
-const positive = (value: number | undefined) => Number.isFinite(value) && (value ?? 0) > 0;
+const positive = (value: unknown) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0;
+};
 
 export function validateCalculationInput(input: CalculationInput): CalculationValidation {
   const errors: CalculationIssue[] = [];
@@ -49,21 +52,26 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
 
   if (input.includeShutters) {
     if (!input.shutterMaterial?.id) errors.push({ code: 'MISSING_MATERIAL', field: 'shutterMaterial', message: 'Shutter material is required when shutters are enabled.' });
-    if (f.shutterGap < 0) errors.push({ code: 'INVALID_DIMENSION', field: 'shutterGap', message: 'Shutter gap cannot be negative.' });
+    const shutterGap = Number(f.shutterGap);
+    if (!Number.isFinite(shutterGap) || shutterGap < 0) errors.push({ code: 'INVALID_DIMENSION', field: 'shutterGap', message: 'Shutter gap cannot be negative.' });
   }
 
   for (const [field, value] of [['shelfCount', f.shelfCount], ['drawerCount', f.drawerCount] as const]) {
-    if (value !== undefined && (!Number.isInteger(value) || value < 0)) {
+    if (value !== undefined && (!Number.isInteger(Number(value)) || Number(value) < 0)) {
       errors.push({ code: 'INVALID_QUANTITY', field, message: `${field} must be a non-negative integer.` });
     }
   }
 
-  if (input.includeShelves && !f.shelfCount) warnings.push({ code: 'INVALID_QUANTITY', field: 'shelfCount', message: 'Shelves are enabled but shelfCount is zero.' });
-  if (input.includeDrawers && !f.drawerCount) warnings.push({ code: 'INVALID_QUANTITY', field: 'drawerCount', message: 'Drawers are enabled but drawerCount is zero.' });
+  if (input.includeShelves && !Number(f.shelfCount)) warnings.push({ code: 'INVALID_QUANTITY', field: 'shelfCount', message: 'Shelves are enabled but shelfCount is zero.' });
+  if (input.includeDrawers && !Number(f.drawerCount)) warnings.push({ code: 'INVALID_QUANTITY', field: 'drawerCount', message: 'Drawers are enabled but drawerCount is zero.' });
 
   for (const [name, material] of [['carcass', input.carcassMaterial], ['back', input.backMaterial], ['shutter', input.shutterMaterial] as const]) {
-    if (material && ((material.sheetWidth && material.sheetWidth < 1) || (material.sheetHeight && material.sheetHeight < 1))) {
-      warnings.push({ code: 'MISSING_SHEET_SIZE', field: `${name}.sheetSize`, message: `${name} material has an invalid sheet dimension.` });
+    if (material) {
+      const sheetWidth = Number(material.sheetWidth);
+      const sheetHeight = Number(material.sheetHeight);
+      if ((material.sheetWidth !== undefined && (!Number.isFinite(sheetWidth) || sheetWidth < 1)) || (material.sheetHeight !== undefined && (!Number.isFinite(sheetHeight) || sheetHeight < 1))) {
+        warnings.push({ code: 'MISSING_SHEET_SIZE', field: `${name}.sheetSize`, message: `${name} material has an invalid sheet dimension.` });
+      }
     }
   }
 
