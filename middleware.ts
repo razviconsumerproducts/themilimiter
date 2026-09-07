@@ -7,8 +7,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEX
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
-  const publicPath = pathname === '/login' || pathname === '/signup' || pathname === '/api/health' || pathname.startsWith('/api/auth/') || pathname.startsWith('/auth/') || pathname.startsWith('/_next/') || pathname === '/favicon.ico'
-
+  const publicPath = pathname === '/' || pathname === '/sign-in' || pathname === '/sign-up' || pathname === '/login' || pathname === '/signup' || pathname === '/billing' || pathname === '/account' || pathname === '/api/health' || pathname.startsWith('/api/auth/') || pathname.startsWith('/auth/') || pathname.startsWith('/_next/') || pathname === '/favicon.ico' || ['/platform','/features','/templates','/use-cases','/pricing','/demo','/about','/faq'].includes(pathname)
   const response = NextResponse.next({ request })
   try {
     const supabase = createServerClient(supabaseUrl, supabaseKey, {
@@ -18,10 +17,10 @@ export async function middleware(request: NextRequest) {
       },
     })
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user && !publicPath) return NextResponse.redirect(new URL('/login', request.url))
-    if (user && (pathname === '/login' || pathname === '/signup')) return NextResponse.redirect(new URL('/', request.url))
+    if (!user && !publicPath) return NextResponse.redirect(new URL('/sign-in', request.url))
+    if (user && (pathname === '/login' || pathname === '/signup')) return NextResponse.redirect(new URL('/executive', request.url))
   } catch {
-    if (!publicPath) return NextResponse.redirect(new URL('/login', request.url))
+    if (!publicPath) return NextResponse.redirect(new URL('/sign-in', request.url))
   }
   return response
 }
