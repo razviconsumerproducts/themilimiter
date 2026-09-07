@@ -59,7 +59,7 @@ export async function POST(request: Request) {
     if (existing && existing.version >= version) return NextResponse.json({ error: 'Quotation version must be greater than the existing version.' }, { status: 409 })
     if (existing?.status === 'ACCEPTED' && version <= existing.version) return NextResponse.json({ error: 'Accepted quotation requires a new version.' }, { status: 409 })
 
-    const costingItemsQuery = await supabase.from('costing_items').select('id, category, source_type, source_id, item_code, description, quantity, unit, unit_cost, wastage_quantity, calculation_basis, notes').eq('costing_run_id', costingRunId).order('id')
+    const costingItemsQuery = await supabase.from('costing_items').select('id, category, source_type, source_id, item_code, description, quantity, unit, unit_cost, wastage_quantity, total_cost, calculation_basis, notes').eq('costing_run_id', costingRunId).order('id')
     if (costingItemsQuery.error) throw new Error(costingItemsQuery.error.message)
     const costingItems = costingItemsQuery.data ?? []
     if (!costingItems.length) return NextResponse.json({ error: 'Approved costing has no costing items.' }, { status: 409 })
