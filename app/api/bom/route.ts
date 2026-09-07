@@ -3,12 +3,7 @@ import { createSupabaseServerClient } from '../../../lib/supabase-server'
 import { buildBom, type BomItemInput, type BomItemType } from '../../../lib/millimetre'
 
 const ITEM_TYPES = new Set<BomItemType>(['BOARD','LAMINATE','EDGE_BAND','HARDWARE','ACCESSORY','CONSUMABLE','OTHER'])
-
-const required = (value: unknown, field: string) => {
-  const result = String(value ?? '').trim()
-  if (!result) throw new Error(`${field} is required.`)
-  return result
-}
+const required = (value: unknown, field: string) => { const result = String(value ?? '').trim(); if (!result) throw new Error(`${field} is required.`); return result }
 
 export async function GET(request: Request) {
   const supabase = await createSupabaseServerClient()
@@ -50,27 +45,14 @@ export async function POST(request: Request) {
       if (!ITEM_TYPES.has(itemType)) throw new Error(`Invalid BOM item type at index ${index}.`)
       const quantity = Number(item.quantity)
       if (!Number.isFinite(quantity) || quantity < 0) throw new Error(`items[${index}].quantity must be non-negative.`)
-      return {
-        furnitureItemId: item.furnitureItemId == null ? undefined : String(item.furnitureItemId),
-        itemType,
-        itemId: item.itemId == null ? undefined : String(item.itemId),
-        itemCode: item.itemCode == null ? undefined : String(item.itemCode),
-        description: required(item.description, `items[${index}].description`),
-        quantity,
-        unit: required(item.unit, `items[${index}].unit`),
-        calculationBasis: item.calculationBasis == null ? undefined : String(item.calculationBasis),
-        sourceComponentId: item.sourceComponentId == null ? undefined : String(item.sourceComponentId),
-        notes: item.notes == null ? undefined : String(item.notes),
-      }
+      return { furnitureItemId: item.furnitureItemId == null ? undefined : String(item.furnitureItemId), itemType, itemId: item.itemId == null ? undefined : String(item.itemId), itemCode: item.itemCode == null ? undefined : String(item.itemCode), description: required(item.description, `items[${index}].description`), quantity, unit: required(item.unit, `items[${index}].unit`), calculationBasis: item.calculationBasis == null ? undefined : String(item.calculationBasis), sourceComponentId: item.sourceComponentId == null ? undefined : String(item.sourceComponentId), notes: item.notes == null ? undefined : String(item.notes) }
     })
 
     const result = buildBom({ projectId, calculationRunId, version, items })
-    const rows = result.items.map((item, index) => ({ ...item, project_id: projectId, sort_order: index }))
-    const { data: bom, error: bomError } = await supabase.from('boms').insert({ project_id: projectId, calculation_run_id: calculationRunId, bom_code: bomCode, version, status: 'GENERATED' }).select('*').single()
+    const { data: bom, error: bomError } = await supabase.rpc('persist_bom_run', { p_project_id: projectId, p_calculation_run_id: calculationRunId, p_bom_code: bomCode, p_version: version, p_status: 'GENERATED', p_items: result.items })
     if (bomError) return NextResponse.json({ error: bomError.message }, { status: 409 })
-    const persisted = rows.map(row => ({ bom_id: bom.id, project_id: row.project_id, furniture_item_id: row.furnitureItemId ?? null, item_type: row.itemType, item_id: row.itemId ?? null, item_code: row.itemCode ?? null, description: row.description, quantity: row.quantity, unit: row.unit, calculation_basis: row.calculationBasis ?? null, source_component_id: row.sourceComponentId ?? null, notes: row.notes ?? null, sort_order: row.sort_order }))
-    const { data: bomItems, error: itemsError } = await supabase.from('bom_items').insert(persisted).select('*')
-    if (itemsError) return NextResponse.json({ error: itemsError.message, bomId: bom.id }, { status: 409 })
+    const { data: bomItems, error: itemsError } = await supabase.from('bom_items').select('*').eq('bom_id', bom.id).order('sort_order', { ascending: true })
+    if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 500 })
     return NextResponse.json({ bom, items: bomItems ?? [], result, createdBy: user.id }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to create BOM.' }, { status: 400 })
