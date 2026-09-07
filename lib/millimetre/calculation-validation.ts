@@ -1,4 +1,4 @@
-import type { CalculationInput } from './domain';
+import type { CalculationInput, Material } from './domain';
 
 export type CalculationIssueCode =
   | 'INVALID_DIMENSION'
@@ -65,13 +65,18 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
   if (input.includeShelves && !Number(f.shelfCount)) warnings.push({ code: 'INVALID_QUANTITY', field: 'shelfCount', message: 'Shelves are enabled but shelfCount is zero.' });
   if (input.includeDrawers && !Number(f.drawerCount)) warnings.push({ code: 'INVALID_QUANTITY', field: 'drawerCount', message: 'Drawers are enabled but drawerCount is zero.' });
 
-  for (const [name, material] of [['carcass', input.carcassMaterial], ['back', input.backMaterial], ['shutter', input.shutterMaterial] as const]) {
-    if (material) {
-      const sheetWidth = Number(material.sheetWidth);
-      const sheetHeight = Number(material.sheetHeight);
-      if ((material.sheetWidth !== undefined && (!Number.isFinite(sheetWidth) || sheetWidth < 1)) || (material.sheetHeight !== undefined && (!Number.isFinite(sheetHeight) || sheetHeight < 1))) {
-        warnings.push({ code: 'MISSING_SHEET_SIZE', field: `${name}.sheetSize`, message: `${name} material has an invalid sheet dimension.` });
-      }
+  const materials: Array<[string, Material | undefined]> = [
+    ['carcass', input.carcassMaterial],
+    ['back', input.backMaterial],
+    ['shutter', input.shutterMaterial],
+  ];
+
+  for (const [name, material] of materials) {
+    if (!material) continue;
+    const sheetWidth = Number(material.sheetWidth);
+    const sheetHeight = Number(material.sheetHeight);
+    if ((material.sheetWidth !== undefined && (!Number.isFinite(sheetWidth) || sheetWidth < 1)) || (material.sheetHeight !== undefined && (!Number.isFinite(sheetHeight) || sheetHeight < 1))) {
+      warnings.push({ code: 'MISSING_SHEET_SIZE', field: `${name}.sheetSize`, message: `${name} material has an invalid sheet dimension.` });
     }
   }
 
