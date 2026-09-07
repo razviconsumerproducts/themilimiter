@@ -1,0 +1,5 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { getSupabaseBrowserClient } from '../../lib/supabase-browser'
+export default function AccountPage(){const [sub,setSub]=useState<any>();useEffect(()=>{(async()=>{const s=getSupabaseBrowserClient();const {data}=await s.rpc('get_subscription_access');setSub(data)})()},[]);return <main className="auth-page"><div className="auth-card"><a href="/executive" className="auth-brand"><span>M</span><b>MILLIMETRE</b></a><span className="eyebrow">ACCOUNT</span><h1>Subscription</h1>{sub&&<><div className="account-status"><b>{sub.status}</b><span>{sub.plan?`${sub.plan} plan`:'7-day free trial'}</span></div><p>{sub.status==='TRIALING'?`Trial ends ${new Date(sub.trial_ends_at).toLocaleString()}`:sub.current_period_end?`Current period ends ${new Date(sub.current_period_end).toLocaleDateString()}`:'Choose a plan to unlock the workspace.'}</p>{!sub.has_access&&<a className="landing-cta large" href="/billing">Choose subscription →</a>}</>}<div className="auth-switch"><a href="/executive">← Back to workspace</a></div></div></main>}
