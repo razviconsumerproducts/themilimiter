@@ -18,11 +18,13 @@ begin
 end
 $$;
 
--- Preserve the legacy records under explicit names for future migration/audit work.
-create index if not exists legacy_delivery_items_project_idx
-  on public.legacy_delivery_items(project_id)
-  where to_regclass('public.legacy_delivery_items') is not null;
-
-create index if not exists legacy_installation_items_id_idx
-  on public.legacy_installation_items(id)
-  where to_regclass('public.legacy_installation_items') is not null;
+do $$
+begin
+  if to_regclass('public.legacy_delivery_items') is not null then
+    execute 'create index if not exists legacy_delivery_items_project_idx on public.legacy_delivery_items(project_id)';
+  end if;
+  if to_regclass('public.legacy_installation_items') is not null then
+    execute 'create index if not exists legacy_installation_items_id_idx on public.legacy_installation_items(id)';
+  end if;
+end
+$$;
