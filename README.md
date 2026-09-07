@@ -17,3 +17,5 @@ Copy `.env.example` to `.env.local` and add the Supabase public URL and anonymou
 
 ## Deployment
 Connect this repository to Vercel. The default production URL can use the free `vercel.app` domain initially.
+
+<!-- Vercel production deployment verification trigger -->
