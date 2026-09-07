@@ -1,5 +1,6 @@
 import './globals.css'
 import './public.css'
+import './auth.css'
 
 export const metadata = {
   title: 'MILLIMETRE — Furniture Manufacturing OS',
