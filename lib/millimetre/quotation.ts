@@ -44,6 +44,7 @@ export interface QuotationResult {
   taxableAmount: Currency;
   taxAmount: Currency;
   grandTotal: Currency;
+  costSnapshot: unknown;
   commercialSnapshot: Record<string, unknown>;
 }
 
@@ -82,6 +83,7 @@ export function buildQuotation(input: QuotationInput): QuotationResult {
     taxableAmount,
     taxAmount,
     grandTotal,
+    costSnapshot: input.costSnapshot,
     commercialSnapshot: {
       paymentTerms: input.paymentTerms ?? null,
       deliveryTerms: input.deliveryTerms ?? null,
