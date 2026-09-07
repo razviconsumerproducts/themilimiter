@@ -29,7 +29,7 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
   const warnings: CalculationIssue[] = [];
   const f = input.furniture;
 
-  const dimensions: Array<[string, unknown]> = [
+  const dimensions: ReadonlyArray<readonly [string, unknown]> = [
     ['width', f.width],
     ['height', f.height],
     ['depth', f.depth],
@@ -37,42 +37,95 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
   ];
 
   for (const [field, value] of dimensions) {
-    if (!positive(value)) errors.push({ code: 'INVALID_DIMENSION', field, message: `${field} must be greater than zero.` });
+    if (!positive(value)) {
+      errors.push({
+        code: 'INVALID_DIMENSION',
+        field,
+        message: `${field} must be greater than zero.`,
+      });
+    }
   }
 
   if (!positive(input.carcassMaterial.thickness)) {
-    errors.push({ code: 'INVALID_THICKNESS', field: 'carcassMaterial.thickness', message: 'Carcass material thickness must be greater than zero.' });
+    errors.push({
+      code: 'INVALID_THICKNESS',
+      field: 'carcassMaterial.thickness',
+      message: 'Carcass material thickness must be greater than zero.',
+    });
   }
   if (!input.carcassMaterial.id) {
-    errors.push({ code: 'MISSING_MATERIAL', field: 'carcassMaterial', message: 'A carcass material is required.' });
+    errors.push({
+      code: 'MISSING_MATERIAL',
+      field: 'carcassMaterial',
+      message: 'A carcass material is required.',
+    });
   }
 
   if (input.includeBack) {
-    if (!input.backMaterial?.id) errors.push({ code: 'MISSING_MATERIAL', field: 'backMaterial', message: 'Back material is required when back is enabled.' });
-    else if (!positive(input.backMaterial.thickness)) errors.push({ code: 'INVALID_THICKNESS', field: 'backMaterial.thickness', message: 'Back material thickness must be greater than zero.' });
+    if (!input.backMaterial?.id) {
+      errors.push({
+        code: 'MISSING_MATERIAL',
+        field: 'backMaterial',
+        message: 'Back material is required when back is enabled.',
+      });
+    } else if (!positive(input.backMaterial.thickness)) {
+      errors.push({
+        code: 'INVALID_THICKNESS',
+        field: 'backMaterial.thickness',
+        message: 'Back material thickness must be greater than zero.',
+      });
+    }
   }
 
   if (input.includeShutters) {
-    if (!input.shutterMaterial?.id) errors.push({ code: 'MISSING_MATERIAL', field: 'shutterMaterial', message: 'Shutter material is required when shutters are enabled.' });
+    if (!input.shutterMaterial?.id) {
+      errors.push({
+        code: 'MISSING_MATERIAL',
+        field: 'shutterMaterial',
+        message: 'Shutter material is required when shutters are enabled.',
+      });
+    }
     const shutterGap = Number(f.shutterGap);
-    if (!Number.isFinite(shutterGap) || shutterGap < 0) errors.push({ code: 'INVALID_DIMENSION', field: 'shutterGap', message: 'Shutter gap cannot be negative.' });
+    if (!Number.isFinite(shutterGap) || shutterGap < 0) {
+      errors.push({
+        code: 'INVALID_DIMENSION',
+        field: 'shutterGap',
+        message: 'Shutter gap cannot be negative.',
+      });
+    }
   }
 
-  const quantities: Array<[string, unknown]> = [
+  const quantities: ReadonlyArray<readonly [string, unknown]> = [
     ['shelfCount', f.shelfCount],
     ['drawerCount', f.drawerCount],
   ];
 
   for (const [field, value] of quantities) {
     if (value !== undefined && (!Number.isInteger(Number(value)) || Number(value) < 0)) {
-      errors.push({ code: 'INVALID_QUANTITY', field, message: `${field} must be a non-negative integer.` });
+      errors.push({
+        code: 'INVALID_QUANTITY',
+        field,
+        message: `${field} must be a non-negative integer.`,
+      });
     }
   }
 
-  if (input.includeShelves && !Number(f.shelfCount)) warnings.push({ code: 'INVALID_QUANTITY', field: 'shelfCount', message: 'Shelves are enabled but shelfCount is zero.' });
-  if (input.includeDrawers && !Number(f.drawerCount)) warnings.push({ code: 'INVALID_QUANTITY', field: 'drawerCount', message: 'Drawers are enabled but drawerCount is zero.' });
+  if (input.includeShelves && !Number(f.shelfCount)) {
+    warnings.push({
+      code: 'INVALID_QUANTITY',
+      field: 'shelfCount',
+      message: 'Shelves are enabled but shelfCount is zero.',
+    });
+  }
+  if (input.includeDrawers && !Number(f.drawerCount)) {
+    warnings.push({
+      code: 'INVALID_QUANTITY',
+      field: 'drawerCount',
+      message: 'Drawers are enabled but drawerCount is zero.',
+    });
+  }
 
-  const materials: Array<[string, Material | undefined]> = [
+  const materials: ReadonlyArray<readonly [string, Material | undefined]> = [
     ['carcass', input.carcassMaterial],
     ['back', input.backMaterial],
     ['shutter', input.shutterMaterial],
@@ -82,8 +135,15 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
     if (!material) continue;
     const sheetWidth = Number(material.sheetWidth);
     const sheetHeight = Number(material.sheetHeight);
-    if ((material.sheetWidth !== undefined && (!Number.isFinite(sheetWidth) || sheetWidth < 1)) || (material.sheetHeight !== undefined && (!Number.isFinite(sheetHeight) || sheetHeight < 1))) {
-      warnings.push({ code: 'MISSING_SHEET_SIZE', field: `${name}.sheetSize`, message: `${name} material has an invalid sheet dimension.` });
+    if (
+      (material.sheetWidth !== undefined && (!Number.isFinite(sheetWidth) || sheetWidth < 1)) ||
+      (material.sheetHeight !== undefined && (!Number.isFinite(sheetHeight) || sheetHeight < 1))
+    ) {
+      warnings.push({
+        code: 'MISSING_SHEET_SIZE',
+        field: `${name}.sheetSize`,
+        message: `${name} material has an invalid sheet dimension.`,
+      });
     }
   }
 
