@@ -22,12 +22,12 @@ export default async function Home() {
   const supabase = await createSupabaseServerClient()
   const [projects, activeProjects, production, qcFailed, deliveries, installations, handovers, service] = await Promise.all([
     count(supabase, 'projects'),
-    count(supabase, 'projects', q => q.not('status', 'in', '(closed,cancelled)')),
-    count(supabase, 'production_orders', q => q.not('status', 'in', '(completed,cancelled)')),
-    count(supabase, 'quality_inspections', q => q.eq('result', 'fail')),
-    count(supabase, 'delivery_orders', q => q.not('status', 'in', '(delivered,closed,cancelled)')),
-    count(supabase, 'installation_jobs', q => q.not('status', 'in', '(completed,cancelled)')),
-    count(supabase, 'handovers', q => q.in('status', ['ready_for_acceptance', 'customer_review', 'snag_pending'])),
+    count(supabase, 'projects', q => q.neq('status', 'closed')),
+    count(supabase, 'production_orders', q => q.not('status', 'in', '(COMPLETED,CANCELLED)')),
+    count(supabase, 'production_qc_inspections', q => q.in('status', ['FAIL', 'REJECTED'])),
+    count(supabase, 'deliveries', q => q.not('status', 'in', '(DELIVERED,CANCELLED)')),
+    count(supabase, 'installations', q => q.not('status', 'in', '(COMPLETED,CANCELLED)')),
+    count(supabase, 'handovers', q => q.in('status', ['READY_FOR_ACCEPTANCE', 'CUSTOMER_REVIEW', 'SNAG_PENDING'])),
     count(supabase, 'service_requests', q => q.not('status', 'in', '(closed,cancelled)')),
   ])
 
