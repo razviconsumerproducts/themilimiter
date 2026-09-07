@@ -54,22 +54,57 @@ export async function POST(request: Request) {
     if (!rows?.length) return NextResponse.json({ error: 'Cutting list contains no items.' }, { status: 409 })
 
     const materialIds = [...new Set(rows.map(row => row.material_id).filter(Boolean))]
+    if (!materialIds.length) return NextResponse.json({ error: 'Cutting list has no material assignments.' }, { status: 409 })
     const { data: materialsRows, error: materialError } = await supabase.from('materials').select('id,code,name,kind,thickness,sheet_width,sheet_height,rate_per_sheet,rate_per_sq_m').in('id', materialIds)
     if (materialError) throw new Error(materialError.message)
+    if ((materialsRows ?? []).length !== materialIds.length) return NextResponse.json({ error: 'One or more cutting-list materials could not be resolved.' }, { status: 409 })
 
     const materials: Material[] = (materialsRows ?? []).map((material) => ({ id: material.id, code: material.code, name: material.name, kind: material.kind, thickness: Number(material.thickness), sheetWidth: material.sheet_width == null ? undefined : Number(material.sheet_width), sheetHeight: material.sheet_height == null ? undefined : Number(material.sheet_height), ratePerSheet: material.rate_per_sheet == null ? undefined : Number(material.rate_per_sheet), ratePerSqM: material.rate_per_sq_m == null ? undefined : Number(material.rate_per_sq_m) }))
     const parts: CuttingPart[] = rows.map((row) => ({ id: row.id, furnitureId: row.furniture_item_id ?? projectId, kind: 'panel', name: row.part_name, qty: Number(row.quantity), length: Number(row.length_mm), width: Number(row.width_mm), thickness: Number(row.thickness_mm), materialId: row.material_id, grain: row.grain_direction === 'REQUIRED', edge: 'none', areaSqM: Number(row.length_mm) * Number(row.width_mm) * Number(row.quantity) / 1_000_000, edgeLengthM: 0 }))
     const result = optimizeSheets({ parts, materials, kerfMm, trimAllowanceMm })
 
-    const { data: run, error: runError } = await supabase.from('optimization_runs').insert({ project_id: projectId, cutting_list_id: cuttingListId, optimization_code: optimizationCode, version, status: 'COMPLETED', algorithm: result.algorithm, kerf_mm: result.kerfMm, trim_allowance_mm: result.trimAllowanceMm, sheet_count: result.sheets.length, total_required_area: result.totalRequiredArea, total_sheet_area: result.totalSheetArea, waste_area: result.wasteArea, utilization_percentage: result.utilizationPercentage, completed_at: new Date().toISOString() }).select('*').single()
-    if (runError) return NextResponse.json({ error: runError.message }, { status: 409 })
+    if (result.unplaced.length) return NextResponse.json({ error: 'Optimization could not place every required piece.', unplaced: result.unplaced, result }, { status: 422 })
 
-    for (const sheet of result.sheets) {
-      const { data: persistedSheet, error: sheetError } = await supabase.from('optimization_sheets').insert({ optimization_run_id: run.id, sheet_number: sheet.sheetNumber, material_id: sheet.materialId, length_mm: sheet.length, width_mm: sheet.width, thickness_mm: sheet.thickness, used_area: sheet.usedArea, waste_area: sheet.wasteArea, utilization_percentage: sheet.utilizationPercentage }).select('id').single()
-      if (sheetError) return NextResponse.json({ error: sheetError.message, optimizationRunId: run.id }, { status: 409 })
-      const placements = sheet.placements.map((placement) => ({ optimization_sheet_id: persistedSheet.id, cutting_list_item_id: rows[placement.partIndex].id, piece_instance_id: placement.pieceInstanceId, x_mm: placement.x, y_mm: placement.y, length_mm: placement.length, width_mm: placement.width, rotation: placement.rotation, grain_orientation: rows[placement.partIndex].grain_direction === 'REQUIRED' ? 'LENGTH' : 'NONE' }))
-      if (placements.length) { const { error: placementError } = await supabase.from('optimization_placements').insert(placements); if (placementError) return NextResponse.json({ error: placementError.message, optimizationRunId: run.id }, { status: 409 }) }
-    }
+    const sheets = result.sheets.map((sheet) => ({
+      sheetNumber: sheet.sheetNumber,
+      materialId: sheet.materialId,
+      length: sheet.length,
+      width: sheet.width,
+      thickness: sheet.thickness,
+      usedArea: sheet.usedArea,
+      wasteArea: sheet.wasteArea,
+      utilizationPercentage: sheet.utilizationPercentage,
+      placements: sheet.placements.map((placement) => ({
+        cuttingListItemId: rows[placement.partIndex].id,
+        pieceInstanceId: placement.pieceInstanceId,
+        x: placement.x,
+        y: placement.y,
+        length: placement.length,
+        width: placement.width,
+        rotation: placement.rotation,
+        grainOrientation: rows[placement.partIndex].grain_direction === 'REQUIRED' ? (placement.rotation ? 'WIDTH' : 'LENGTH') : 'NONE',
+      })),
+    }))
+
+    const { data: run, error: persistError } = await supabase.rpc('persist_optimization_run', {
+      p_project_id: projectId,
+      p_cutting_list_id: cuttingListId,
+      p_optimization_code: optimizationCode,
+      p_version: version,
+      p_status: 'COMPLETED',
+      p_algorithm: result.algorithm,
+      p_kerf_mm: result.kerfMm,
+      p_trim_allowance_mm: result.trimAllowanceMm,
+      p_sheet_count: result.sheets.length,
+      p_total_required_area: result.totalRequiredArea,
+      p_total_sheet_area: result.totalSheetArea,
+      p_waste_area: result.wasteArea,
+      p_utilization_percentage: result.utilizationPercentage,
+      p_completed_at: new Date().toISOString(),
+      p_sheets: sheets,
+      p_placements: [],
+    })
+    if (persistError) return NextResponse.json({ error: persistError.message }, { status: 409 })
     return NextResponse.json({ optimizationRun: run, result, createdBy: user.id }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to create optimization run.' }, { status: 400 })
