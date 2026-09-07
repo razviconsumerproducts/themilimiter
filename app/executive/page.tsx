@@ -1,93 +1,19 @@
 import { createSupabaseServerClient } from '../../lib/supabase-server'
 
-const stages = [
-  ['Projects', 'projects'],
-  ['Measurements', 'project_measurements'],
-  ['Furniture', 'furniture_items'],
-  ['Components', 'furniture_components'],
-  ['Calculations', 'calculation_runs'],
-  ['Cutting List', 'cutting_list_items'],
-]
+const nav = [['Dashboard','/executive'],['Customers','/customers'],['Measurements','/measurements'],['Furniture','/furniture'],['Inventory','/inventory'],['Purchasing','/purchasing'],['Manufacturing','/manufacturing']]
 
 export default async function ExecutiveDashboard() {
   const supabase = await createSupabaseServerClient()
-  const results = await Promise.all(
-    stages.map(async ([label, table]) => {
-      const { count } = await supabase.from(table).select('*', { count: 'exact', head: true })
-      return [label, count ?? 0] as const
-    }),
-  )
-
-  const { data: projects } = await supabase
-    .from('projects')
-    .select('id, code, name, status, updated_at')
-    .order('updated_at', { ascending: false })
-    .limit(10)
-
-  return (
-    <div className="shell">
-      <aside className="side">
-        <div className="brand">MILLIMETRE</div>
-        <nav className="nav">
-          <a href="/">Dashboard</a>
-          <a href="/executive" className="active">Executive</a>
-          <a href="/customers">Customers</a>
-          <a href="/measurements">Measurements</a>
-          <a href="/furniture">Furniture</a>
-          <a href="/inventory">Inventory</a>
-          <a href="/purchasing">Purchasing</a>
-          <a href="/manufacturing">Manufacturing</a>
-        </nav>
-      </aside>
-
-      <main className="main">
-        <header className="top">
-          <div>
-            <h1 className="title">Executive Dashboard</h1>
-            <div className="muted">Canonical MILLIMETRE V1 operational data</div>
-          </div>
-          <span className="status">V1</span>
-        </header>
-
-        <section className="grid">
-          {results.map(([label, count]) => (
-            <div className="card" key={label}>
-              <div className="muted">{label}</div>
-              <div className="metric">{count}</div>
-            </div>
-          ))}
-        </section>
-
-        <section className="section">
-          <h2>Project Pipeline</h2>
-          <div className="grid">
-            {['draft', 'measurement', 'design', 'calculated', 'quoted', 'approved', 'production', 'delivered', 'closed'].map((status) => (
-              <div className="card" key={status}>
-                <div className="muted">{status.replace('_', ' ')}</div>
-                <div className="metric">{projects?.filter((p) => p.status === status).length ?? 0}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="section">
-          <h2>Recent Projects</h2>
-          <table className="table">
-            <thead><tr><th>Code</th><th>Project</th><th>Status</th><th>Updated</th></tr></thead>
-            <tbody>
-              {(projects ?? []).map((project) => (
-                <tr key={project.id}>
-                  <td>{project.code}</td>
-                  <td>{project.name}</td>
-                  <td><span className="status">{project.status}</span></td>
-                  <td>{new Date(project.updated_at).toLocaleDateString('en-IN')}</td>
-                </tr>
-              ))}
-              {!(projects ?? []).length && <tr><td colSpan={4}>No canonical projects found.</td></tr>}
-            </tbody>
-          </table>
-        </section>
-      </main>
-    </div>
-  )
+  const [{ data: kpi }, { data: projects }, { data: alerts }, { data: ops }] = await Promise.all([
+    supabase.rpc('get_executive_dashboard').single(),
+    supabase.from('projects').select('id,code,name,status,updated_at').order('updated_at',{ascending:false}).limit(8),
+    supabase.from('millimetre_dashboard_alerts').select('id,alert_type,message,severity').eq('status','OPEN').order('created_at',{ascending:false}).limit(8),
+    supabase.rpc('get_executive_operational_kpis').single(),
+  ])
+  const metrics = [
+    ['Active Projects',kpi?.active_projects??0,'/customers'],['Quotation Value',`₹${Number(kpi?.total_quotation_value??0).toLocaleString('en-IN')}`,'/quotations'],
+    ['Purchase Value',`₹${Number(kpi?.total_purchase_value??0).toLocaleString('en-IN')}`,'/purchasing'],['Open POs',kpi?.open_purchase_orders??0,'/purchasing'],
+    ['Production Open',kpi?.production_open??0,'/manufacturing'],['QC Holds',kpi?.production_qc_hold??0,'/manufacturing'],['Deliveries Open',kpi?.deliveries_open??0,'/manufacturing'],['Service Tickets',kpi?.open_service_tickets??0,'/maintenance']
+  ]
+  return <div className="erp-shell"><aside className="erp-sidebar"><div className="erp-brand"><span className="brand-mark">M</span><div><strong>MILLIMETRE</strong><small>Furniture ERP</small></div></div><div className="workspace">WORKSPACE <span>⌄</span></div><nav>{nav.map(([label,href])=><a key={href} href={href} className={href==='/executive'?'active':''}><span className="nav-dot"/>{label}</a>)}</nav><div className="sidebar-bottom"><a href="/settings">⚙ Settings</a><a href="/logout">↪ Sign out</a></div></aside><main className="erp-main"><header className="erp-header"><div><div className="eyebrow">OVERVIEW / EXECUTIVE</div><h1>Executive Dashboard</h1><p>Live operational view across the complete furniture workflow.</p></div><div className="header-actions"><a className="ghost-btn" href="/projects">Projects</a><a className="primary-btn" href="/customers">+ New Project</a></div></header><section className="metric-grid">{metrics.map(([label,value,href])=><a className="metric-card" href={href as string} key={label as string}><span>{label}</span><strong>{value}</strong><small>View details →</small></a>)}</section><div className="content-grid"><section className="panel pipeline"><div className="panel-head"><div><h2>Project Pipeline</h2><p>Current project distribution</p></div><a href="/projects">View all →</a></div><div className="pipeline-row">{['draft','measurement','design','calculated','quoted','approved','production','delivered'].map(status=><div className="pipeline-item" key={status}><strong>{projects?.filter(p=>p.status===status).length??0}</strong><span>{status}</span></div>)}</div></section><section className="panel alerts"><div className="panel-head"><div><h2>Exceptions</h2><p>Items needing attention</p></div><span className="alert-count">{alerts?.length??0}</span></div>{alerts?.length?alerts.map(a=><div className="alert-row" key={a.id}><i className={a.severity==='CRITICAL'?'critical':''}/><div><strong>{a.alert_type.replace('_',' ')}</strong><span>{a.message}</span></div></div>):<div className="empty">✓ No open exceptions</div>}</section></div><div className="content-grid lower"><section className="panel"><div className="panel-head"><div><h2>Operational Performance</h2><p>Factory, logistics and service health</p></div></div><div className="performance-grid"><div><strong>{Number(ops?.production_yield_pct??0).toFixed(1)}%</strong><span>Production yield</span></div><div><strong>{Number(ops?.delivery_completion_pct??0).toFixed(1)}%</strong><span>Delivery completion</span></div><div><strong>{Number(ops?.installation_completion_pct??0).toFixed(1)}%</strong><span>Installation completion</span></div><div><strong>{Number(ops?.service_sla_compliance_pct??0).toFixed(1)}%</strong><span>SLA compliance</span></div></div></section><section className="panel"><div className="panel-head"><div><h2>Recent Projects</h2><p>Latest activity</p></div></div><div className="project-list">{projects?.map(p=><a href={`/projects/${p.id}`} key={p.id}><span><b>{p.code}</b>{p.name}</span><em>{p.status}</em></a>)}</div></section></div></main></div>
 }
