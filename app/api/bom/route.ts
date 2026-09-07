@@ -49,10 +49,14 @@ export async function POST(request: Request) {
     })
 
     const result = buildBom({ projectId, calculationRunId, version, items })
-    const { data: bom, error: bomError } = await supabase.rpc('persist_bom_run', { p_project_id: projectId, p_calculation_run_id: calculationRunId, p_bom_code: bomCode, p_version: version, p_status: 'GENERATED', p_items: result.items })
-    if (bomError) return NextResponse.json({ error: bomError.message }, { status: 409 })
-    const { data: bomItems, error: itemsError } = await supabase.from('bom_items').select('*').eq('bom_id', bom.id).order('sort_order', { ascending: true })
+    const { data: persisted, error: persistError } = await supabase.rpc('persist_bom_run', { p_project_id: projectId, p_calculation_run_id: calculationRunId, p_bom_code: bomCode, p_version: version, p_items: result.items })
+    if (persistError) return NextResponse.json({ error: persistError.message }, { status: 409 })
+    const bomId = String(persisted?.bom_id ?? '')
+    if (!bomId) return NextResponse.json({ error: 'BOM persistence returned no BOM id.' }, { status: 500 })
+    const { data: bomItems, error: itemsError } = await supabase.from('bom_items').select('*').eq('bom_id', bomId).order('sort_order', { ascending: true })
     if (itemsError) return NextResponse.json({ error: itemsError.message }, { status: 500 })
+    const { data: bom, error: bomReadError } = await supabase.from('boms').select('*').eq('id', bomId).single()
+    if (bomReadError) return NextResponse.json({ error: bomReadError.message }, { status: 500 })
     return NextResponse.json({ bom, items: bomItems ?? [], result, createdBy: user.id }, { status: 201 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to create BOM.' }, { status: 400 })
