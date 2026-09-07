@@ -29,12 +29,14 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
   const warnings: CalculationIssue[] = [];
   const f = input.furniture;
 
-  for (const [field, value] of [
+  const dimensions: Array<[string, unknown]> = [
     ['width', f.width],
     ['height', f.height],
     ['depth', f.depth],
     ['carcassThickness', f.carcassThickness],
-  ] as const) {
+  ];
+
+  for (const [field, value] of dimensions) {
     if (!positive(value)) errors.push({ code: 'INVALID_DIMENSION', field, message: `${field} must be greater than zero.` });
   }
 
@@ -56,7 +58,12 @@ export function validateCalculationInput(input: CalculationInput): CalculationVa
     if (!Number.isFinite(shutterGap) || shutterGap < 0) errors.push({ code: 'INVALID_DIMENSION', field: 'shutterGap', message: 'Shutter gap cannot be negative.' });
   }
 
-  for (const [field, value] of [['shelfCount', f.shelfCount], ['drawerCount', f.drawerCount] as const]) {
+  const quantities: Array<[string, unknown]> = [
+    ['shelfCount', f.shelfCount],
+    ['drawerCount', f.drawerCount],
+  ];
+
+  for (const [field, value] of quantities) {
     if (value !== undefined && (!Number.isInteger(Number(value)) || Number(value) < 0)) {
       errors.push({ code: 'INVALID_QUANTITY', field, message: `${field} must be a non-negative integer.` });
     }
