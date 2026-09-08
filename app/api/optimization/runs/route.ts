@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     const result = optimizeSheets({ parts, materials, kerfMm, trimAllowanceMm })
     if (result.unplaced.length) return NextResponse.json({ error: 'Optimization could not place every required piece.', unplaced: result.unplaced, result }, { status: 409 })
 
-    const sheets = result.sheets.map((sheet) => ({ ...sheet, placements: sheet.placements.map((p) => ({ ...p, cuttingListItemId: rows[p.partIndex].id, grainOrientation: rows[p.partIndex].grain_direction === 'REQUIRED' ? 'LENGTH' : 'NONE' })) }))
+    const sheets = result.sheets.map((sheet) => ({ ...sheet, placements: sheet.placements.map((p: any) => ({ ...p, cuttingListItemId: rows[p.partIndex].id, grainOrientation: rows[p.partIndex].grain_direction === 'REQUIRED' ? 'LENGTH' : 'NONE' })) }))
     const { data: persisted, error: persistError } = await supabase.rpc('persist_optimization_run', { p_project_id: projectId, p_cutting_list_id: cuttingListId, p_optimization_code: optimizationCode, p_version: version, p_algorithm: result.algorithm, p_kerf_mm: result.kerfMm, p_trim_allowance_mm: result.trimAllowanceMm, p_sheet_count: result.sheets.length, p_total_required_area: result.totalRequiredArea, p_total_sheet_area: result.totalSheetArea, p_waste_area: result.wasteArea, p_utilization_percentage: result.utilizationPercentage, p_sheets: sheets, p_placements: [] })
     if (persistError) return NextResponse.json({ error: persistError.message }, { status: 409 })
     return NextResponse.json({ optimizationRun: persisted, result, createdBy: user.id }, { status: 201 })
