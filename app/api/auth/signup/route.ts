@@ -3,13 +3,26 @@ import { createSupabaseServerClient } from '../../../../lib/supabase-server'
 
 export async function POST(request: Request) {
   try {
-    const { email, password } = await request.json()
-    if (typeof email !== 'string' || typeof password !== 'string' || password.length < 6) {
-      return NextResponse.json({ error: 'Enter a valid email and a password of at least 6 characters.' }, { status: 400 })
+    const body = await request.json()
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+    const name = typeof body.name === 'string' ? body.name.trim() : ''
+
+    if (!email || !email.includes('@') || password.length < 8 || !name) {
+      return NextResponse.json({ error: 'Enter your name, a valid email, and a password of at least 8 characters.' }, { status: 400 })
     }
 
     const supabase = await createSupabaseServerClient()
-    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password })
+    const origin = request.headers.get('origin') || new URL(request.url).origin
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: `${origin}/sign-in`,
+      },
+    })
+
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     return NextResponse.json({ authenticated: Boolean(data.session), emailConfirmationRequired: !data.session })
