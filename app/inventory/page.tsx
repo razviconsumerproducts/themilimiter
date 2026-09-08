@@ -2,11 +2,14 @@ import { createSupabaseServerClient } from '../../lib/supabase-server'
 
 export default async function InventoryPage(){
   const supabase=await createSupabaseServerClient()
-  const [{data:inventory,error},{data:movements,movementError},{data:reservations,reservationError}]=await Promise.all([
+  const [inventoryResult,movementResult,reservationResult]=await Promise.all([
     supabase.from('inventory').select('id,product_id,warehouse_id,quantity,available_quantity,reserved_quantity,quarantine_quantity,reorder_level,products(sku,name,unit),warehouses(code,name)').order('updated_at',{ascending:false}).limit(200),
     supabase.from('millimetre_inventory_movements').select('id,material_id,warehouse_id,movement_type,quantity,reference_no,created_at,goods_receipt_id,goods_receipt_item_id,purchase_order_id').order('created_at',{ascending:false}).limit(100),
     supabase.from('millimetre_inventory_reservations').select('id,material_id,warehouse_id,quantity,status,reference_no,created_at').order('created_at',{ascending:false}).limit(100),
   ])
+  const {data:inventory,error}=inventoryResult
+  const {data:movements,error:movementError}=movementResult
+  const {data:reservations,error:reservationError}=reservationResult
   const loadError=error||movementError||reservationError
   return <main className="main">
     <header className="top"><div><h1 className="title">Inventory</h1><div className="muted">Stage 14 — stock balance, availability, reservations and movement ledger</div></div><a className="status" href="/manufacturing">Production</a></header>
