@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
     if (!body.projectId || !body.costingRunId || !body.quotationCode) return NextResponse.json({ error: 'projectId, costingRunId and quotationCode are required.' }, { status: 400 })
 
-    const { data: costing, error: costingError } = await supabase.from('costing_runs').select('id, project_id, status, currency, output_snapshot, total_cost, selling_price').eq('id', body.costingRunId).maybeSingle()
+    const { data: costing, error: costingError } = await supabase.from('costing_runs').select('id, project_id, status, currency, output_snapshot, total_cost, selling_price, version').eq('id', body.costingRunId).maybeSingle()
     if (costingError) return NextResponse.json({ error: costingError.message }, { status: 500 })
     if (!costing) return NextResponse.json({ error: 'Costing run not found.' }, { status: 404 })
     if (costing.project_id !== body.projectId) return NextResponse.json({ error: 'Costing run does not belong to the requested project.' }, { status: 409 })
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
 
     const { data: costingItems, error: costingItemsError } = await supabase.from('costing_items').select('id').eq('costing_run_id', costing.id)
     if (costingItemsError) return NextResponse.json({ error: costingItemsError.message }, { status: 500 })
-    const costingItemIds = new Set((costingItems ?? []).map(item => item.id))
+    const costingItemIds = new Set((costingItems ?? []).map((item: {id:string}) => item.id))
     for (const [index, item] of items.entries()) {
       if (item.sourceType !== 'COSTING_ITEM' || !item.sourceId || !costingItemIds.has(item.sourceId)) {
         return NextResponse.json({ error: `Quotation item ${index + 1} must reference a costing item from the approved costing run.` }, { status: 409 })
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     }).select('*').single()
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 409 })
 
-    const { error: itemError } = await supabase.from('quotation_items').insert(quotation.items.map((item, index) => ({
+    const { error: itemError } = await supabase.from('quotation_items').insert(quotation.items.map((item: any, index: number) => ({
       quotation_id: inserted.id, item_type: item.itemType, source_type: item.sourceType ?? null, source_id: item.sourceId ?? null,
       item_code: item.itemCode ?? null, description: item.description, quantity: item.quantity, unit: item.unit,
       unit_price: item.unitPrice, discount: item.discount, tax_rate: item.taxRate, tax_amount: item.taxAmount,
