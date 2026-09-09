@@ -31,11 +31,21 @@ export async function POST(request: Request) {
     const { data: rows, error: itemError } = await supabase.from('cutting_list_items').select('id,part_name,material_id,length_mm,width_mm,thickness_mm,quantity,grain_direction,furniture_item_id').eq('project_id', projectId).eq('calculation_run_id', cuttingList.calculation_run_id).order('sequence_no', { ascending: true })
     if (itemError) throw new Error(itemError.message); if (!rows?.length) return NextResponse.json({ error: 'Cutting list contains no items.' }, { status: 409 })
     const materialIds = [...new Set(rows.map(row => row.material_id).filter(Boolean))]; if (!materialIds.length) return NextResponse.json({ error: 'Cutting list has no material assignments.' }, { status: 409 })
-    const { data: materialsRows, error: materialError } = await supabase.from('materials').select('id,code,name,kind,thickness,sheet_width,sheet_height,rate_per_sheet,rate_per_sq_m').in('id', materialIds)
+
+    const { data: materialsRows, error: materialError } = await supabase.from('materials').select('id,code,name,category,thickness_mm,sheet_width_mm,sheet_length_mm,unit_cost,active').in('id', materialIds)
     if (materialError) throw new Error(materialError.message); if ((materialsRows ?? []).length !== materialIds.length) return NextResponse.json({ error: 'One or more cutting-list materials could not be found.' }, { status: 409 })
 
-    const materials: Material[] = (materialsRows ?? []).map((m) => ({ id: m.id, code: m.code, name: m.name, kind: m.kind, thickness: Number(m.thickness), sheetWidth: m.sheet_width == null ? undefined : Number(m.sheet_width), sheetHeight: m.sheet_height == null ? undefined : Number(m.sheet_height), ratePerSheet: m.rate_per_sheet == null ? undefined : Number(m.rate_per_sheet), ratePerSqM: m.rate_per_sq_m == null ? undefined : Number(m.rate_per_sq_m) }))
-    const parts: CuttingPart[] = rows.map((r) => ({ id: r.id, furnitureId: r.furniture_item_id ?? projectId, kind: 'panel', name: r.part_name, qty: Number(r.quantity), length: Number(r.length_mm), width: Number(r.width_mm), thickness: Number(r.thickness_mm), materialId: r.material_id, grain: r.grain_direction === 'REQUIRED', edge: 'none', areaSqM: Number(r.length_mm) * Number(r.width_mm) * Number(r.quantity) / 1_000_000, edgeLengthM: 0 }))
+    const materials: Material[] = (materialsRows ?? []).map((m) => ({
+      id: m.id, code: m.code, name: m.name,
+      kind: String(m.category ?? 'board').toLowerCase().replace(/[- ]/g, '_') as Material['kind'],
+      thickness: Number(m.thickness_mm),
+      sheetWidth: m.sheet_width_mm == null ? undefined : Number(m.sheet_width_mm),
+      sheetHeight: m.sheet_length_mm == null ? undefined : Number(m.sheet_length_mm),
+      ratePerSheet: m.unit_cost == null ? undefined : Number(m.unit_cost),
+    }))
+    if (materials.some(m => !(m.thickness > 0) || !(Number(m.sheetWidth) > 0) || !(Number(m.sheetHeight) > 0))) return NextResponse.json({ error: 'All optimization materials must have valid thickness and sheet dimensions.' }, { status: 409 })
+
+    const parts: CuttingPart[] = rows.map((r) => ({ id: r.id, furnitureId: r.furniture_item_id ?? projectId, kind: 'panel', name: r.part_name, qty: Number(r.quantity), length: Number(r.length_mm), width: Number(r.width_mm), thickness: Number(r.thickness_mm), materialId: r.material_id, grain: String(r.grain_direction ?? '').toUpperCase() === 'REQUIRED', edge: 'none', areaSqM: Number(r.length_mm) * Number(r.width_mm) * Number(r.quantity) / 1_000_000, edgeLengthM: 0 }))
     const result = optimizeSheets({ parts, materials, kerfMm, trimAllowanceMm })
     if (result.unplaced.length) return NextResponse.json({ error: 'Optimization could not place every required piece.', unplaced: result.unplaced, result }, { status: 409 })
 
