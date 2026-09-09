@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const supabase = await createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Authentication required.' }, { status: 401 })
     const projectId = new URL(request.url).searchParams.get('projectId'); if (!projectId) return NextResponse.json({ error: 'projectId is required.' }, { status: 400 })
-    const { data, error } = await supabase.from('optimization_runs').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('millimetre_optimization_runs').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 }); return NextResponse.json({ optimizationRuns: data ?? [] })
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load optimization runs.' }, { status: 500 }) }
 }
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     const { data: cuttingList, error: listError } = await supabase.from('cutting_lists').select('id,project_id,calculation_run_id,status').eq('id', cuttingListId).maybeSingle()
     if (listError) throw new Error(listError.message); if (!cuttingList) return NextResponse.json({ error: 'Cutting list not found.' }, { status: 404 })
-    if (cuttingList.project_id !== projectId || !['APPROVED', 'RELEASED'].includes(cuttingList.status)) return NextResponse.json({ error: 'Optimization requires an approved or released cutting list belonging to the requested project.' }, { status: 409 })
+    if (cuttingList.project_id !== projectId || !['approved', 'issued'].includes(String(cuttingList.status).toLowerCase())) return NextResponse.json({ error: 'Optimization requires an approved or issued cutting list belonging to the requested project.' }, { status: 409 })
 
     const { data: rows, error: itemError } = await supabase.from('cutting_list_items').select('id,part_name,material_id,length_mm,width_mm,thickness_mm,quantity,grain_direction,furniture_item_id').eq('project_id', projectId).eq('calculation_run_id', cuttingList.calculation_run_id).order('sequence_no', { ascending: true })
     if (itemError) throw new Error(itemError.message); if (!rows?.length) return NextResponse.json({ error: 'Cutting list contains no items.' }, { status: 409 })
@@ -39,8 +39,21 @@ export async function POST(request: Request) {
     const result = optimizeSheets({ parts, materials, kerfMm, trimAllowanceMm })
     if (result.unplaced.length) return NextResponse.json({ error: 'Optimization could not place every required piece.', unplaced: result.unplaced, result }, { status: 409 })
 
-    const sheets = result.sheets.map((sheet) => ({ ...sheet, placements: sheet.placements.map((p: any) => ({ ...p, cuttingListItemId: rows[p.partIndex].id, grainOrientation: rows[p.partIndex].grain_direction === 'REQUIRED' ? 'LENGTH' : 'NONE' })) }))
-    const { data: persisted, error: persistError } = await supabase.rpc('persist_optimization_run', { p_project_id: projectId, p_cutting_list_id: cuttingListId, p_optimization_code: optimizationCode, p_version: version, p_algorithm: result.algorithm, p_kerf_mm: result.kerfMm, p_trim_allowance_mm: result.trimAllowanceMm, p_sheet_count: result.sheets.length, p_total_required_area: result.totalRequiredArea, p_total_sheet_area: result.totalSheetArea, p_waste_area: result.wasteArea, p_utilization_percentage: result.utilizationPercentage, p_sheets: sheets, p_placements: [] })
+    const sheets = result.sheets.map((sheet, sheetIndex) => {
+      const placements = sheet.placements.map((p: any) => ({ ...p, cuttingListItemId: rows[p.partIndex].id, grainOrientation: rows[p.partIndex].grain_direction === 'REQUIRED' ? 'LENGTH' : 'NONE' }))
+      const allocatedAreaSqM = placements.reduce((sum: number, p: any) => sum + (Number(p.width) * Number(p.height)) / 1_000_000, 0)
+      const sheetAreaSqM = Number(sheet.width) * Number(sheet.height) / 1_000_000
+      const wastagePercent = sheetAreaSqM ? Math.max(0, (sheetAreaSqM - allocatedAreaSqM) / sheetAreaSqM * 100) : 0
+      return { sheetNo: sheetIndex + 1, materialId: sheet.materialId, sheetLengthMm: Number(sheet.width), sheetWidthMm: Number(sheet.height), allocatedAreaSqM, wastagePercent, panelCount: placements.length, cutCount: Math.max(0, placements.length - 1), allocation: placements }
+    })
+    const panelCount = sheets.reduce((sum, s) => sum + s.panelCount, 0)
+    const cutCount = sheets.reduce((sum, s) => sum + s.cutCount, 0)
+    const { data: persisted, error: persistError } = await supabase.rpc('persist_optimization_run', {
+      p_project_id: projectId, p_calculation_run_id: cuttingList.calculation_run_id, p_algorithm_version: result.algorithm,
+      p_sheet_count: sheets.length, p_panel_count: panelCount, p_cut_count: cutCount,
+      p_wastage_percent: result.totalSheetArea ? result.wasteArea / result.totalSheetArea * 100 : 0,
+      p_result: { ...result, cuttingListId, optimizationCode, version }, p_sheets: sheets,
+    })
     if (persistError) return NextResponse.json({ error: persistError.message }, { status: 409 })
     return NextResponse.json({ optimizationRun: persisted, result, createdBy: user.id }, { status: 201 })
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to create optimization run.' }, { status: 400 }) }
