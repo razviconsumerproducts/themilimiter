@@ -3,10 +3,8 @@ import { createSupabaseServerClient } from '../../../../../lib/supabase-server'
 
 const transitions: Record<string, string[]> = {
   DRAFT: ['RECEIVED', 'CANCELLED'],
-  RECEIVED: ['QC_PENDING', 'CANCELLED'],
-  QC_PENDING: ['QC_COMPLETE', 'CANCELLED'],
-  QC_COMPLETE: ['POSTED', 'CANCELLED'],
-  POSTED: [],
+  RECEIVED: ['COMPLETED', 'CANCELLED'],
+  COMPLETED: [],
   CANCELLED: [],
 }
 
@@ -22,7 +20,13 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { data: receipt, error: loadError } = await supabase.from('goods_receipts').select('id,status,project_id').eq('id', id).maybeSingle()
     if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 })
     if (!receipt) return NextResponse.json({ error: 'Goods receipt not found.' }, { status: 404 })
-    if (!(transitions[receipt.status] ?? []).includes(next)) return NextResponse.json({ error: `Invalid goods receipt transition: ${receipt.status} -> ${next}` }, { status: 409 })
+    if (!(transitions[String(receipt.status).toUpperCase()] ?? []).includes(next)) return NextResponse.json({ error: `Invalid goods receipt transition: ${receipt.status} -> ${next}` }, { status: 409 })
+    if (next === 'COMPLETED') {
+      const { error } = await supabase.rpc('post_goods_receipt', { p_receipt_id: id })
+      if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+      const { data: updated } = await supabase.from('goods_receipts').select('*').eq('id', id).single()
+      return NextResponse.json({ goodsReceipt: updated, changedBy: user.id })
+    }
     const { data: updated, error } = await supabase.from('goods_receipts').update({ status: next, updated_at: new Date().toISOString() }).eq('id', id).eq('status', receipt.status).select('*').single()
     if (error) return NextResponse.json({ error: error.message }, { status: 409 })
     return NextResponse.json({ goodsReceipt: updated, changedBy: user.id })
