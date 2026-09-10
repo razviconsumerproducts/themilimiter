@@ -17,17 +17,18 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const body = await request.json() as Record<string, unknown>
     const next = String(body.status ?? '').trim().toUpperCase()
     if (!next) return NextResponse.json({ error: 'status is required.' }, { status: 400 })
-    const { data: receipt, error: loadError } = await supabase.from('goods_receipts').select('id,status,project_id').eq('id', id).maybeSingle()
+    const { data: receipt, error: loadError } = await supabase.from('goods_receipts').select('id,status,purchase_order_id').eq('id', id).maybeSingle()
     if (loadError) return NextResponse.json({ error: loadError.message }, { status: 500 })
     if (!receipt) return NextResponse.json({ error: 'Goods receipt not found.' }, { status: 404 })
     if (!(transitions[String(receipt.status).toUpperCase()] ?? []).includes(next)) return NextResponse.json({ error: `Invalid goods receipt transition: ${receipt.status} -> ${next}` }, { status: 409 })
     if (next === 'COMPLETED') {
       const { error } = await supabase.rpc('post_goods_receipt', { p_receipt_id: id })
       if (error) return NextResponse.json({ error: error.message }, { status: 409 })
-      const { data: updated } = await supabase.from('goods_receipts').select('*').eq('id', id).single()
+      const { data: updated, error: reloadError } = await supabase.from('goods_receipts').select('*').eq('id', id).single()
+      if (reloadError) return NextResponse.json({ error: reloadError.message }, { status: 500 })
       return NextResponse.json({ goodsReceipt: updated, changedBy: user.id })
     }
-    const { data: updated, error } = await supabase.from('goods_receipts').update({ status: next, updated_at: new Date().toISOString() }).eq('id', id).eq('status', receipt.status).select('*').single()
+    const { data: updated, error } = await supabase.from('goods_receipts').update({ status: next }).eq('id', id).eq('status', receipt.status).select('*').single()
     if (error) return NextResponse.json({ error: error.message }, { status: 409 })
     return NextResponse.json({ goodsReceipt: updated, changedBy: user.id })
   } catch (error) {
