@@ -20,7 +20,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
     const { data: item, error: itemError } = await supabase
       .from('goods_receipt_items')
-      .select('id,goods_receipt_id,received_qty,product_id')
+      .select('id,goods_receipt_id,received_qty')
       .eq('id', itemId)
       .eq('goods_receipt_id', id)
       .maybeSingle()
@@ -28,11 +28,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!item) return NextResponse.json({ error: 'Goods receipt item not found.' }, { status: 404 })
 
     const inspected = Number(body.inspectedQty ?? body.inspectedQuantity ?? item.received_qty)
-    if (!Number.isFinite(inspected) || inspected !== Number(item.received_qty)) return NextResponse.json({ error: 'Inspected quantity must equal received quantity.' }, { status: 409 })
-    if (accepted + rejected + hold !== inspected) return NextResponse.json({ error: 'accepted + rejected + hold must equal inspected quantity.' }, { status: 400 })
+    if (!Number.isFinite(inspected) || inspected !== Number(item.received_qty)) {
+      return NextResponse.json({ error: 'Inspected quantity must equal received quantity.' }, { status: 409 })
+    }
+    if (accepted + rejected + hold !== inspected) {
+      return NextResponse.json({ error: 'accepted + rejected + hold must equal inspected quantity.' }, { status: 400 })
+    }
 
     const status = String(body.qcStatus ?? body.status ?? (accepted === inspected ? 'ACCEPTED' : hold > 0 ? 'HOLD' : accepted > 0 ? 'PARTIAL' : 'REJECTED')).toUpperCase()
-    if (!['PENDING','ACCEPTED','REJECTED','HOLD','PARTIAL'].includes(status)) return NextResponse.json({ error: 'Invalid QC status.' }, { status: 400 })
+    if (!['ACCEPTED','REJECTED','HOLD','PARTIAL'].includes(status)) return NextResponse.json({ error: 'QC status must be ACCEPTED, REJECTED, HOLD, or PARTIAL.' }, { status: 400 })
     if (rejected > 0 && !String(body.rejectionReason ?? '').trim()) return NextResponse.json({ error: 'rejectionReason is required when rejectedQty > 0.' }, { status: 400 })
     if (hold > 0 && !String(body.holdReason ?? '').trim()) return NextResponse.json({ error: 'holdReason is required when holdQty > 0.' }, { status: 400 })
 
@@ -52,6 +56,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       .select('*')
       .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 409 })
+
+    await supabase.from('goods_receipts').update({ status: 'QC_PENDING' }).eq('id', id).eq('status', 'RECEIVED')
     return NextResponse.json({ goodsReceiptItem: updated, changedBy: user.id }, { status: 200 })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to record goods receipt QC.' }, { status: 400 })
