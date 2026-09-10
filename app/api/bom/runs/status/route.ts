@@ -2,10 +2,9 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '../../../../../lib/supabase-server'
 
 const transitions: Record<string, string[]> = {
-  GENERATED: ['REVIEW'],
-  REVIEW: ['APPROVED'],
-  APPROVED: ['RELEASED', 'SUPERSEDED'],
-  RELEASED: ['SUPERSEDED'],
+  draft: ['approved'],
+  approved: ['issued'],
+  issued: ['superseded'],
 }
 
 export async function PATCH(request: Request) {
@@ -16,12 +15,12 @@ export async function PATCH(request: Request) {
 
     const body = await request.json() as Record<string, unknown>
     const bomId = String(body.bomId ?? '').trim()
-    const nextStatus = String(body.status ?? '').trim().toUpperCase()
+    const nextStatus = String(body.status ?? '').trim().toLowerCase()
     if (!bomId || !nextStatus) return NextResponse.json({ error: 'bomId and status are required.' }, { status: 400 })
 
     const { data: bom, error: readError } = await supabase
-      .from('boms')
-      .select('id,project_id,status,calculation_run_id,version')
+      .from('millimetre_boms')
+      .select('id,project_id,status,calculation_run_id')
       .eq('id', bomId)
       .maybeSingle()
     if (readError) throw new Error(readError.message)
@@ -31,32 +30,21 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: `Invalid BOM transition: ${bom.status} → ${nextStatus}.` }, { status: 409 })
     }
 
-    if (nextStatus === 'APPROVED' || nextStatus === 'RELEASED') {
+    if (nextStatus === 'approved' || nextStatus === 'issued') {
       const { count, error: countError } = await supabase
-        .from('bom_items')
+        .from('millimetre_bom_items')
         .select('id', { count: 'exact', head: true })
         .eq('bom_id', bom.id)
       if (countError) throw new Error(countError.message)
       if (!count) return NextResponse.json({ error: 'BOM must contain at least one item.' }, { status: 409 })
     }
 
-    if (nextStatus === 'RELEASED') {
-      const { data: approved, error: approvedError } = await supabase
-        .from('boms')
-        .select('id,status,project_id,calculation_run_id')
-        .eq('id', bom.id)
-        .eq('status', 'APPROVED')
-        .maybeSingle()
-      if (approvedError) throw new Error(approvedError.message)
-      if (!approved) return NextResponse.json({ error: 'Only an approved BOM can be released.' }, { status: 409 })
-    }
-
     const patch: Record<string, unknown> = { status: nextStatus }
-    if (nextStatus === 'APPROVED') { patch.approved_by = user.id; patch.approved_at = new Date().toISOString() }
-    if (nextStatus === 'RELEASED') { patch.released_by = user.id; patch.released_at = new Date().toISOString() }
+    if (nextStatus === 'approved') { patch.approved_by = user.id; patch.approved_at = new Date().toISOString() }
+    if (nextStatus === 'issued') { patch.issued_by = user.id; patch.issued_at = new Date().toISOString() }
 
     const { data: updated, error: updateError } = await supabase
-      .from('boms')
+      .from('millimetre_boms')
       .update(patch)
       .eq('id', bom.id)
       .eq('status', bom.status)
